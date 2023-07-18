@@ -13,3 +13,11 @@ for bucket in s3.buckets.all():
     print(bucket.name)
 s3.Bucket('ajadbucket1').upload_file(Filename='train.csv', Key='train.csv')
 s3.Bucket('ajadbucket1').upload_file(Filename='test.csv', Key='test.csv')
+
+#retreiving
+
+obj = s3.Bucket('ajadbucket1').Object('train.csv').get()
+obj1 = s3.Bucket('ajadbucket1').Object('test.csv').get()
+
+train_df = pd.read_csv(obj['Body'], index_col=0)
+test_df = pd.read_csv(obj1['Body'], index_col=0)
