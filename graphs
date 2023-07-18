@@ -1,0 +1,23 @@
+#using matplotlib and seaborn
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName("SparkRddExample").getOrCreate()
+
+# Read the train and test data CSV files
+train_data = spark.read.csv('train.csv', header=True, inferSchema=True)
+test_data = spark.read.csv('test.csv', header=True, inferSchema=True)
+import seaborn as sns
+sns.barplot(x='Pclass', y='Survived', data=train_data.toPandas())
+
+sns.barplot(x='Embarked', y='Survived', data=train_data.toPandas())
+train_data.groupby("Sex", "Pclass").avg("Survived").toPandas().\
+    pivot('Sex', 'Pclass', 'avg(Survived)').\
+    plot(kind='bar')
+import matplotlib.pyplot as plt
+plt.xlabel("Fare")
+plt.ylabel("Pclass")
+plt.scatter(train_data.select("Fare").rdd.flatMap(lambda x: x).collect(),
+            train_data.select("Pclass").rdd.flatMap(lambda x: x).collect())
+
+plt.grid(which='major', linestyle='-', linewidth='0.5', color='green')
+plt.grid(which='minor', linestyle=':', linewidth='0.5', color='black')
+plt.show()
