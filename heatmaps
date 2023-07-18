@@ -1,0 +1,99 @@
+#also include preprocessing test_data
+
+from pyspark.ml.feature import StringIndexer
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, when, count, isnan, mean
+import pandas as pd
+from pyspark.sql.types import StructField, IntegerType, StringType, StructType
+
+spark = SparkSession.builder.master("local[1]").appName("SparkExamples").getOrCreate()
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+'''train = spark.read.csv("train_proc.csv",header=True)
+#train.show()
+
+
+
+age_survived_df = train.select(col("Age"), col("Survived"))
+#age_survived_df.show()
+
+#sns heatmap only takes pandas df as parametrs
+
+df = pd.read_csv("train_proc.csv")
+features = ["Age","Survived"]
+df1 = df[features]
+df1.head()
+
+# Create the correlation heatmap using Seaborn
+sns.heatmap(df1.corr(), annot=True, cmap="coolwarm")
+
+# Display the heatmap
+plt.show()
+
+
+
+
+
+# Perform the cross-tabulation
+crosstab = train.groupby("Sex1").pivot("Survived").count().na.fill(0)
+
+crosstab = crosstab.select(*(crosstab[col].cast("int").alias(col) for col in crosstab.columns))
+
+# Convert the counts to a Pandas DataFrame
+pandas_df = crosstab.toPandas()
+
+# Create the heatmap using Seaborn
+sns.heatmap(pandas_df, annot=True, cmap="coolwarm")
+
+# Display the heatmap
+#plt.show()'''
+
+test_df =spark.read.csv("test.csv",header=True)
+#print(test_df.show())
+
+
+test_df = test_df.withColumn("MrAge",when(col("Name").contains("Mr."),col("Age")))
+test_df = test_df.withColumn("MrsAge",when(col("Name").contains("Mrs."),col("Age")))
+test_df = test_df.withColumn("MissAge",when(col("Name").contains("Miss"),col("Age")))
+test_df = test_df.withColumn("MasterAge",when(col("Name").contains("Master"),col("Age")))
+test_df = test_df.withColumn("DrAge",when(col("Name").contains("Dr"),col("Age")))
+test_df = test_df.withColumn("RevAge",when(col("Name").contains("Rev"),col("Age")))
+test_df = test_df.withColumn("DonAge",when(col("Name").contains("Don"),col("Age")))
+#print(train_df.show())
+
+mr = test_df.select(mean("MrAge")).first()[0]
+mrs = test_df.select(mean("MrsAge")).first()[0]
+miss = test_df.select(mean("MissAge")).first()[0]
+master = test_df.select(mean("MasterAge")).first()[0]
+dr = test_df.select(mean("DrAge")).first()[0]
+rev = test_df.select(mean("RevAge")).first()[0]
+don = test_df.select(mean("DonAge")).first()[0]
+
+test_df = test_df.withColumn("Age",when((col("Name").contains("Mr.")) & test_df.Age.isNull(), mr).otherwise(test_df.Age))
+test_df = test_df.withColumn("Age",when((col("Name").contains("Mrs.")) & test_df.Age.isNull(), mrs).otherwise(test_df.Age))
+test_df = test_df.withColumn("Age",when((col("Name").contains("Miss")) & test_df.Age.isNull(), miss).otherwise(test_df.Age))
+test_df = test_df.withColumn("Age",when((col("Name").contains("Master")) & test_df.Age.isNull(), master).otherwise(test_df.Age))
+test_df = test_df.withColumn("Age",when((col("Name").contains("Dr")) & test_df.Age.isNull(), dr).otherwise(test_df.Age))
+test_df = test_df.withColumn("Age",when((col("Name").contains("Rev")) & test_df.Age.isNull(), rev).otherwise(test_df.Age))
+
+
+
+test_df = test_df.dropna(subset=["Fare", "Age"])
+test_df = test_df.drop("PassengerId","Cabin","MrAge","MrsAge","MissAge","MasterAge","DrAge","RevAge","DonAge")
+test_df = test_df.withColumn("Relatives",col("SibSp")+col("Parch"))
+
+scc = StringIndexer(inputCol="Embarked",outputCol="Embarked1")
+test_df = scc.fit(test_df).transform(test_df)
+
+scc = StringIndexer(inputCol="Sex",outputCol="Sex1")
+test_df = scc.fit(test_df).transform(test_df)
+test_df = test_df.drop("Sex","Ticket","Embarked","Parch","SibSp")
+test_df.select([count(when(isnan(c) | col(c).isNull(), c)).alias(c) for c in test_df.columns]
+   ).show()
+test_df = test_df.withColumn("Age_Class", col("Age") * col("PClass"))
+test_df.show()
+
+pandas_df = test_df.toPandas()
+pandas_df.describe()
+pandas_df.to_csv("test_proc1.csv",index = False)
