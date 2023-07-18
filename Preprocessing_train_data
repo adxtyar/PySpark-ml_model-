@@ -1,0 +1,118 @@
+
+
+
+
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import mean, when, col, array_contains, isnan, count
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+from pyspark.ml.feature import StringIndexer
+
+spark = SparkSession.builder \
+      .master("local[1]") \
+      .appName("SparkByExamples.com") \
+      .getOrCreate()
+
+#\ in python indicates continuity for code to ;look beautiful
+#getOrCreate means create a new sparksession or retrieve an existing one
+#sparksession class has many methods
+#spark is an object of that class
+#need py4j library to connect with jvm to access java objects since apache spark written in that
+#sc = spark.sparkContext
+
+
+
+
+schema = StructType([
+    StructField("PassengerId", IntegerType(), nullable=True),
+    StructField("Survived", StringType(), nullable=True),
+    StructField("Pclass", StringType(), nullable=True),
+    StructField("Name", StringType(), nullable=True),
+    StructField("Sex", StringType(), nullable=True),
+    StructField("Age", IntegerType(), nullable=True),
+    StructField("SibSp", IntegerType(), nullable=True),
+    StructField("Parch", IntegerType(), nullable=True),
+    StructField("Ticket", StringType(), nullable=True),
+    StructField("Fare", IntegerType(), nullable=False),
+    StructField("Cabin", StringType(), nullable=True),
+    StructField("Embarked", StringType(), nullable=True),
+    # Add other columns as per your CSV file structure
+])
+train_df = spark.read.csv("train.csv",header=True,schema = schema)
+#print(train_df.show())
+
+#train_df.filter(train_df.Name.contains("Mr.")).show(truncate=False)
+
+#train_df.select(mean("Age")).show()
+
+train_df = train_df.withColumn("MrAge",when(col("Name").contains("Mr."),col("Age")))
+train_df = train_df.withColumn("MrsAge",when(col("Name").contains("Mrs."),col("Age")))
+train_df = train_df.withColumn("MissAge",when(col("Name").contains("Miss"),col("Age")))
+train_df = train_df.withColumn("MasterAge",when(col("Name").contains("Master"),col("Age")))
+train_df = train_df.withColumn("DrAge",when(col("Name").contains("Dr"),col("Age")))
+train_df = train_df.withColumn("RevAge",when(col("Name").contains("Rev"),col("Age")))
+train_df = train_df.withColumn("DonAge",when(col("Name").contains("Don"),col("Age")))
+#print(train_df.show())
+
+mr = train_df.select(mean("MrAge")).first()[0]
+mrs = train_df.select(mean("MrsAge")).first()[0]
+miss = train_df.select(mean("MissAge")).first()[0]
+master = train_df.select(mean("MasterAge")).first()[0]
+dr = train_df.select(mean("DrAge")).first()[0]
+rev = train_df.select(mean("RevAge")).first()[0]
+don = train_df.select(mean("DonAge")).first()[0]
+
+#first()[0] for scalar values
+
+# Define the variables for filling missing values
+variables = {"MrAge": mr, "MrsAge": mrs, "MissAge":miss,"MasterAge":master,"DrAge":dr,"RevAge":rev,"DonAge":don}
+
+#dictionary variables wherekeys are the column names  and the values are the var.filling the missing values.
+
+
+
+train_df = train_df.withColumn("Age",when((col("Name").contains("Mr.")) & train_df.Age.isNull(), mr).otherwise(train_df.Age))
+train_df = train_df.withColumn("Age",when((col("Name").contains("Mrs.")) & train_df.Age.isNull(), mrs).otherwise(train_df.Age))
+train_df = train_df.withColumn("Age",when((col("Name").contains("Miss")) & train_df.Age.isNull(), miss).otherwise(train_df.Age))
+train_df = train_df.withColumn("Age",when((col("Name").contains("Master")) & train_df.Age.isNull(), master).otherwise(train_df.Age))
+train_df = train_df.withColumn("Age",when((col("Name").contains("Dr")) & train_df.Age.isNull(), dr).otherwise(train_df.Age))
+train_df = train_df.withColumn("Age",when((col("Name").contains("Rev")) & train_df.Age.isNull(), rev).otherwise(train_df.Age))
+#if col = name contains mr and is empty fill it with mr variable otherwise keep train_df.age
+#otherwise last argument within a when function
+#train_df.show()
+
+#total = train_df.select(sum("Age").isNull().cast("integer")).collect()[0][0]
+total1 = train_df.filter(col("Age").isNull()).count()
+
+#train_df.select([count(when(isnan(c) | col(c).isNull(), c)).alias(c) for c in train_df.columns]).show()
+
+
+train_df = train_df.dropna(subset=["Embarked"])
+
+#train_df.select([count(when(isnan(c) | col(c).isNull(), c)).alias(c) for c in train_df.columns]).show()
+
+
+
+train_df = train_df.drop("MrAge","MrsAge","MissAge","MasterAge","DrAge","RevAge","DonAGe"\
+    ,"Fare","Cabin","PassengerID","Ticket")
+
+
+scc = StringIndexer(inputCol="Embarked",outputCol="Embarked1")
+train_df = scc.fit(train_df).transform(train_df)
+
+scc = StringIndexer(inputCol="Sex",outputCol="Sex1")
+train_df = scc.fit(train_df).transform(train_df)
+
+train_df.select([count(when(isnan(c) | col(c).isNull(), c)).alias(c) for c in train_df.columns]
+   ).show()
+
+
+train_df = train_df.withColumn("Relatives",col("SibSp")+col("Parch"))
+train_df =train_df.drop("Sex","Embarked","SibSp","Parch")
+train_df = train_df.withColumn("Age_Class", col("Age") * col("PClass"))
+
+#train_df.write.csv('mycsv.csv')
+pandas_df = train_df.toPandas()
+pandas_df.describe()
+pandas_df.to_csv("train_proc1.csv",index = False)
+#indicates csv will not make extra column for counting rows
+
